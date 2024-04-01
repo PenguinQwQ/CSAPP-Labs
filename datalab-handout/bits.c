@@ -62,7 +62,7 @@ INTEGER CODING RULES:
   7. Use any data type other than int.  This implies that you
      cannot use arrays, structs, or unions.
 
- 
+
   You may assume that your machine:
   1. Uses 2s complement, 32-bit representations of integers.
   2. Performs right shifts arithmetically.
@@ -142,8 +142,15 @@ NOTES:
  *   Max ops: 14
  *   Rating: 1
  */
+
+/*
+
+*/
 int bitXor(int x, int y) {
-  return 2;
+  int _x = (~x) & y;
+  int _y = x & (~y);
+  int ret = ~((~_x) & (~_y));
+  return ret;
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -152,9 +159,7 @@ int bitXor(int x, int y) {
  *   Rating: 1
  */
 int tmin(void) {
-
-  return 2;
-
+  return (1 << 31);
 }
 //2
 /*
@@ -165,7 +170,9 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+  int flag1 = !((x + 1) ^ (~x));
+  int flag2 = !!(x ^ (~0)); 
+  return flag1 & flag2;
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -176,7 +183,12 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  int x1 = x & 0xAA;
+  int x2 = ((x >> 8) & x1);
+  int x3 = ((x >> 16) & x2);
+  int x4 = ((x >> 24) & x3);
+// 到这里，x4如果 == mask，才能保证；
+  return !(((x4 & 0xAA) ^ 0xAA));
 }
 /* 
  * negate - return -x 
@@ -186,7 +198,8 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  int ret = (~x) + 1;
+  return ret;
 }
 //3
 /* 
@@ -199,7 +212,15 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  int var1 = 0x30;
+  int var2 = 0x3a; // here has a bug... 0x39 + 0x01 = 0x3a, not 0x40
+  int t1 = (~var1) + 1;
+  int t2 = (~var2) + 1;
+  int x1 = x + t1; // x1 >= 0?
+  int x2 = x + t2; // x2 < 0? 看符号位
+  int cond1 = !((x1 >> 31) & 1); // 1是负，0是正
+  int cond2 = (x2 >> 31) & 1; // 1是负，0是正
+  return cond1 & cond2;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +230,17 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  // weird, x is neg and then we should return y...
+ // int op = (x >> 31) & 1; // op = 1, ret = z; op = 0, ret = y
+ // int mask = (~op) + 1;// op = 1, mask = 1111...10 + 1 = 111...1; op = 0, mask = 11111 ....1 + 1 = 000..0
+ // int ret = (mask & z) + ((~mask) & y);
+  int mux = (!!((x ^ 0) & x)); // x = 0, mux = 1; x = 1, mux = 0;
+  // if x is non-zero, then mux is 1; mask = 1111...10 + 1 = 1111111, 
+  // if x = 0, then mux = 0, 1111.. + 1 = 000...., ret z;
+  int mask = (~mux) + 1;
+ // printf("mux = %u\n", mux);
+  return (mask & y) + ((~mask) & z);
+  //return ret;
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -218,8 +249,28 @@ int conditional(int x, int y, int z) {
  *   Max ops: 24
  *   Rating: 3
  */
-int isLessOrEqual(int x, int y) {
-  return 2;
+int isLessOrEqual(int x, int y) { // 19 ops
+  int sigx = (x >> 31) & 1;
+  int sigy = (y >> 31) & 1;
+  int notsame_sig = sigx ^ sigy;
+  // notsame_sig = 0, implies x,y same sigs; notsame_sig != 0, holds different sigs
+  int x_neg_y_pos = sigx & (!sigy);
+  int x_pos_y_neg = (!sigx) & sigy;
+  //printf("sigx is %u\n", sigx);
+  //printf("sigy is %u\n", sigy);
+  //printf("notsame_sig is %u\n", notsame_sig);
+  //printf("x_neg_y_pos is %u\n", x_neg_y_pos);
+  //printf("x_pos_y_neg is %u\n", x_pos_y_neg);
+  int _x = (~x) + 1;
+  // z = y - x
+  int z = y + _x;
+  int sigz = (z >> 31) & 1;
+  //printf("sigz is %u\n", sigz);
+  // sigz = 1 && notsame_sig = 0, y < x, return 0;
+  // sigz = 0 && notsame_sig = 0, y >= x, return 1;
+  // notsame_sig = 1 && x_neg_y_pos, return 1;
+  // notsame_sig = 1 && x_pos_y_neg, return 0;
+  return ((!sigz) & (!notsame_sig)) | (notsame_sig & (x_neg_y_pos));
 }
 //4
 /* 
@@ -231,7 +282,26 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  int offset = 0x01;
+  int sigx = (x >> 31) & 1;
+  // if and only if x is pos?
+  // x < 0, sigx = 1
+  // x >= 0, sigx = 0
+  // construct x - 1 to measure x > 0 --> x >= 1, -> x - 1 >= 0
+  int y = x + ((~(offset)) + 1);
+  // y = x - 1;
+  // -1 = 111111....1, 10000000001, add is 100000...., 
+  int sigy = (y >> 31) & 1;
+  // y = x - 1 >= 0, sigy = 0;
+  // y = x - 1 < 0, sigy = 1;
+  int lowbit_mask = 0x01;
+  // x < 0, sigx = 1, logical Neg is 0;
+  // x = 0, sigx = 0, sigy = 1, logical Neg is 1;
+  // x > 0, sigx = 0, sigy = 0, logical Neg is 0;
+  //printf("sigx is %u\n", sigx);
+  //printf("sigy is %u\n", sigy);
+  return (~sigx) & sigy;
+
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -246,7 +316,28 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+  int sigx = (x >> 31) & 1;
+  int mask = (~sigx) + 1;
+  //printf("sigx = %u\n", sigx);
+  //printf("mask = %u\n", mask);
+  //printf("~mask = %u\n", ~mask);
+  // x >= 0, sigx = 0, mask = 000..0, x < 0, sigx = 1, mask = 111...11
+  x = (mask & (~x)) | ((~mask) & x);
+  // Here shouldn't use add!!!
+  //printf("~x = %u\n", x);
+  int bit16 = (!!(x >> 16)) << 4;
+  x = x >> bit16;
+  int bit8 = (!!(x >> 8)) << 3;
+  x = x >> bit8;
+  int bit4 = (!!(x >> 4)) << 2;
+  x = x >> bit4;
+  int bit2 = (!!(x >> 2)) << 1;
+  x = x >> bit2;
+  int bit1 = (!!(x >> 1));
+  x = x >> bit1;
+  int bit0 = (!!x);
+
+  return bit16 + bit8 + bit4 + bit2 + bit1 + bit0 + 1;
 }
 //float
 /* 
@@ -261,7 +352,26 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  // exponent_offset = 23(30,23), fraction_offset = 0(22,0), sign_offset = 1;
+  unsigned full_mask = (~0) ^ (1 << 31);
+  unsigned fraction_mask = (1 << 23) - 1;
+  unsigned exp_mask = full_mask - fraction_mask;
+  
+  unsigned exp = (uf & exp_mask) >> 23;
+  unsigned sign = (uf & (1 << 31));
+  unsigned INF = exp_mask | sign;
+
+  if(exp == 0) // Non normal
+    return ((fraction_mask & uf) << 1) | sign;
+  
+  if(exp == 255) // Infinity or NaN
+    return uf; //
+  exp++; // modify the exp
+
+  if(exp == 255)
+    return INF;
+
+  return sign | (exp << 23) | (uf & fraction_mask);
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -276,7 +386,30 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  unsigned sign = uf & (1 << 31);
+  unsigned fraction_mask = (1 << 23) - 1;
+  unsigned frac = uf & fraction_mask;
+  unsigned exp_mask = (~0) ^ fraction_mask;
+  exp_mask = exp_mask ^ (1 << 31);
+  unsigned exp = (uf & exp_mask) >> 23;
+  int E = exp - 127;
+  if(exp == 255 || E > 31) // Nan And Infinity
+    return 0x80000000u;
+  
+  
+  if(E < 0)
+    return 0;
+
+  unsigned tail_part = frac | (1 << 23);
+  int result = 0;
+  // shift left 23 bits, compared with E!
+  if(E >= 23)
+    result = tail_part << (E - 23);
+  else
+    result = tail_part >> (23 - E);
+  
+  if(sign) result = (-1) * result;
+  return result;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -292,5 +425,20 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  // calculate the 2^x in float type
+  // 1.0 * 2^x
+  // so the E = x, exp = x + 127;
+  // if exp 
+  // if exp >= 255, exp = 255;
+
+  int exp = x + 127;
+  if(exp >= 255) return 0x7f800000;
+  if(exp >= 0 && exp < 255) return (exp << 23);
+  if(exp < 0 && exp >= -23) // using abnormal number representation
+  {// 10000...0, equals 2^{-126} * 0.1 = 2^{-127} * 1; to 000.....1 , equals 2^{-126} * 0.000(22 0s)1 = 149 - 127 = 22
+      return (1 << (23 + exp));
+  }
+  else
+    return 0;
+
 }
